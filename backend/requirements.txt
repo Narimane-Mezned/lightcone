@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+skyfield
+pydantic
+pytest
+httpx
