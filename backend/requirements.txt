@@ -4,3 +4,4 @@ skyfield
 pydantic
 pytest
 httpx
+python-dotenv

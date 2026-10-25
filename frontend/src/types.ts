@@ -1,7 +1,8 @@
 export type NodeId = 'earth' | 'mars'
 export type Priority = 'medical' | 'science' | 'commercial'
-export type Policy = 'lottery' | 'prorata' | 'priority'
+export type Policy = 'needs' | 'lottery' | 'prorata' | 'priority'
 export type Status = 'provisional' | 'final' | 'frozen'
+export type IntentSource = 'llm' | 'rules'
 
 export interface LinkInfo {
   date: string
@@ -27,11 +28,34 @@ export interface ScenarioIn {
   policy: Policy
 }
 
+export interface NeedSpec {
+  min_qty: number
+  max_qty: number
+  category: Priority
+  can_defer: boolean
+  summary: string
+}
+
+export interface IntentIn {
+  node: NodeId
+  actor: string
+  text: string
+}
+
+export interface IntentOut {
+  needs: NeedSpec
+  source: IntentSource
+  model: string
+  notes: string[]
+}
+
 export interface RequestIn {
   node: NodeId
   actor: string
   qty: number
   priority: Priority
+  needs?: NeedSpec | null
+  text?: string | null
 }
 
 export interface RequestOut {
@@ -40,6 +64,9 @@ export interface RequestOut {
   actor: string
   qty: number
   priority: Priority
+  min_qty: number
+  can_defer: boolean
+  text: string | null
   vc: number[]
   sim_t: number
   nonce: string
@@ -64,6 +91,12 @@ export interface Evidence {
   news_arrival: number
 }
 
+export interface Outcome {
+  allocation: Record<string, number>
+  deferred: Record<string, number>
+  needs_met: number
+}
+
 export interface Receipt {
   tie: string[]
   evidence: Evidence[]
@@ -71,14 +104,21 @@ export interface Receipt {
   seed: string
   order: string[]
   allocation: Record<string, number>
+  deferred: Record<string, number>
+  needs_met: number
+  lottery: Outcome
   explanation: string
+  narrative: string
+  narrative_source: IntentSource
 }
 
 export interface NodeView {
   log: RequestOut[]
   vc: number[]
   allocations: Record<string, number>
+  deferred: Record<string, number>
   hash: string
+  tie_risk: number
 }
 
 export interface StateOut {
@@ -92,6 +132,7 @@ export interface StateOut {
   in_flight: InFlight[]
   receipts: Receipt[]
   naive_allocations: Record<string, number>
+  ai_enabled: boolean
 }
 
 export interface FairnessOut {
