@@ -10,6 +10,7 @@ interface Props {
 }
 
 const POLICIES: { id: Policy; name: string; text: string }[] = [
+  { id: 'envoys', name: 'AI envoys', text: 'Each request carries an AI envoy holding its owner\'s mandate. Envoys strike the deal that maximises the product of their gains over a lottery (Nash bargaining); nobody gets a worse deal than a coin flip.' },
   { id: 'needs', name: 'Needs-aware', text: 'Minimums first (cannot-wait before can-wait, then medical > science > commercial), rest shared fairly, next-ship guarantee for flexible requesters.' },
   { id: 'lottery', name: 'Verifiable lottery', text: 'Random order anyone can recompute from the requests themselves.' },
   { id: 'prorata', name: 'Pro-rata', text: 'Share capacity in proportion to what each requested.' },
@@ -101,6 +102,16 @@ export default function PolicyPicker({ state, date, onDateChange, onChanged }: P
           AI: {state.ai_enabled ? <span className="text-tie">online</span> : <span className="text-signal">offline (rule-based fallback)</span>}
         </p>
         {error && <p className="text-xs text-mars">{error}</p>}
+        <div className="rounded border border-line p-2 text-xs">
+          <p className="mb-1 text-tie">Ghost Radar model card</p>
+          <p className="text-muted">Poisson regression, 9 features (time of sol, days to launch window, planet), trained on one simulated year of colony traffic (synthetic: no real Mars traffic exists yet).</p>
+          <p className="mt-1 font-mono">
+            demand-rate error: {state.ghost_metrics.mae_rate_model?.toFixed(4)} vs {state.ghost_metrics.mae_rate_naive?.toFixed(4)} naive
+          </p>
+          <p className="font-mono">
+            during launch rush: {state.ghost_metrics.mae_rate_model_rush?.toFixed(3)} vs {state.ghost_metrics.mae_rate_naive_rush?.toFixed(3)} naive
+          </p>
+        </div>
       </div>
     </div>
   )

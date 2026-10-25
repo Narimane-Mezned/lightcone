@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 Node = Literal["earth", "mars"]
 Priority = Literal["medical", "science", "commercial"]
-Policy = Literal["needs", "lottery", "prorata", "priority"]
+Policy = Literal["envoys", "needs", "lottery", "prorata", "priority"]
 Status = Literal["provisional", "final", "frozen"]
 IntentSource = Literal["llm", "rules"]
 
@@ -30,7 +30,7 @@ class ScenarioIn(BaseModel):
     date: str
     compression: float = 60
     resource: Resource = Resource()
-    policy: Policy = "needs"
+    policy: Policy = "envoys"
 
 
 class NeedSpec(BaseModel):
@@ -38,6 +38,9 @@ class NeedSpec(BaseModel):
     max_qty: float
     category: Priority = "commercial"
     can_defer: bool = False
+    next_ship_value: float = 0.0
+    yield_to_medical: bool = False
+    yield_max_qty: float = 0.0
     summary: str = ""
 
 
@@ -71,6 +74,9 @@ class RequestOut(BaseModel):
     priority: Priority
     min_qty: float
     can_defer: bool
+    next_ship_value: float
+    yield_to_medical: bool
+    yield_max_qty: float
     text: str | None
     vc: list[int]
     sim_t: float
@@ -86,6 +92,7 @@ class InFlight(BaseModel):
     sent_t: float
     arrive_t: float
     delivered: bool
+    predicted_p: float | None = None
 
 
 class Evidence(BaseModel):
@@ -102,6 +109,15 @@ class Outcome(BaseModel):
     needs_met: int
 
 
+class EnvoyResult(BaseModel):
+    id: str
+    actor: str
+    mandate: str
+    baseline: float
+    utility: float
+    gain: float
+
+
 class Receipt(BaseModel):
     tie: list[str]
     evidence: list[Evidence]
@@ -112,9 +128,26 @@ class Receipt(BaseModel):
     deferred: dict[str, float]
     needs_met: int
     lottery: Outcome
+    envoys: list[EnvoyResult] = []
     explanation: str
     narrative: str
     narrative_source: IntentSource
+
+
+class Ghost(BaseModel):
+    planet: Node
+    expected_requests: float
+    p_at_least_one: float
+    expected_kg: float
+    window_start: float
+    window_end: float
+    times: list[float]
+
+
+class Forecast(BaseModel):
+    low: float
+    high: float
+    p_tie: float
 
 
 class NodeView(BaseModel):
@@ -124,6 +157,8 @@ class NodeView(BaseModel):
     deferred: dict[str, float]
     hash: str
     tie_risk: float
+    ghost: Ghost
+    forecast: dict[str, Forecast]
 
 
 class StateOut(BaseModel):
@@ -138,6 +173,7 @@ class StateOut(BaseModel):
     receipts: list[Receipt]
     naive_allocations: dict[str, float]
     ai_enabled: bool
+    ghost_metrics: dict[str, float]
 
 
 class FairnessOut(BaseModel):

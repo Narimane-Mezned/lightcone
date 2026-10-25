@@ -18,6 +18,9 @@ class Request:
     min_qty: float = 0.0
     can_defer: bool = False
     text: str | None = None
+    next_ship_value: float = 0.0
+    yield_to_medical: bool = False
+    yield_max_qty: float = 0.0
 
 
 @dataclass
@@ -39,6 +42,9 @@ class Node:
         min_qty: float | None = None,
         can_defer: bool = False,
         text: str | None = None,
+        next_ship_value: float = 0.0,
+        yield_to_medical: bool = False,
+        yield_max_qty: float = 0.0,
     ) -> Request:
         self.vc[self.index] += 1
         request = Request(
@@ -53,6 +59,9 @@ class Node:
             min_qty=qty if min_qty is None else min_qty,
             can_defer=can_defer,
             text=text,
+            next_ship_value=next_ship_value,
+            yield_to_medical=yield_to_medical,
+            yield_max_qty=yield_max_qty,
         )
         self.log.append(request)
         return request

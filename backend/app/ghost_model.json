@@ -1,0 +1,43 @@
+{
+  "description": "Poisson regression of booking requests per 10-minute bin, trained on one simulated year of Earth and Mars colony traffic.",
+  "features": [
+    "bias",
+    "sin(sol)",
+    "cos(sol)",
+    "sin(2 sol)",
+    "cos(2 sol)",
+    "exp(-days_to_launch/3)",
+    "exp(-days_to_launch/10)",
+    "days_to_launch/365",
+    "is_mars"
+  ],
+  "bin_s": 600,
+  "sol_hours": 24.66,
+  "coefficients": [
+    -1.69378,
+    -0.431749,
+    -0.488816,
+    -0.091727,
+    -0.029826,
+    1.56347,
+    0.360703,
+    -0.024512,
+    -0.405867
+  ],
+  "mean_kg": {
+    "earth": 248.0,
+    "mars": 202.9
+  },
+  "metrics": {
+    "train_bins": 85848,
+    "test_bins": 21462,
+    "test_deviance_model": 13086.6,
+    "test_deviance_naive_constant": 13966.1,
+    "deviance_explained_vs_naive": 0.063,
+    "mae_rate_model": 0.0038,
+    "mae_rate_naive": 0.07082,
+    "mae_rate_model_rush": 0.03538,
+    "mae_rate_naive_rush": 0.34537
+  },
+  "data": "synthetic: no real interplanetary booking traffic exists yet"
+}

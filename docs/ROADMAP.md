@@ -1,5 +1,7 @@
 # Lightcone — Team Roadmap (Narimane & Shahd)
 
+> **UPDATE 01:20 — AI layer added.** Lightcone now has AI envoys (negotiate for each requester by Nash bargaining), an intent compiler (plain language → mandate), Ghost Radar (ML prediction of requests still in flight) and guarded AI transcripts. **Read `docs/AI_LAYER.md`: its demo flow (section 6) and Q&A (section 7) replace the older ones in this file.**
+
 Hackathon: IEEE Lumen 2.0 "Beyond 2030". Pitch: **Sunday 25 October, 09:00** — 5 minutes (demo included) + 5 minutes of Q&A.
 
 ---

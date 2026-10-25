@@ -1,6 +1,6 @@
 export type NodeId = 'earth' | 'mars'
 export type Priority = 'medical' | 'science' | 'commercial'
-export type Policy = 'needs' | 'lottery' | 'prorata' | 'priority'
+export type Policy = 'envoys' | 'needs' | 'lottery' | 'prorata' | 'priority'
 export type Status = 'provisional' | 'final' | 'frozen'
 export type IntentSource = 'llm' | 'rules'
 
@@ -33,6 +33,9 @@ export interface NeedSpec {
   max_qty: number
   category: Priority
   can_defer: boolean
+  next_ship_value: number
+  yield_to_medical: boolean
+  yield_max_qty: number
   summary: string
 }
 
@@ -66,6 +69,9 @@ export interface RequestOut {
   priority: Priority
   min_qty: number
   can_defer: boolean
+  next_ship_value: number
+  yield_to_medical: boolean
+  yield_max_qty: number
   text: string | null
   vc: number[]
   sim_t: number
@@ -81,6 +87,7 @@ export interface InFlight {
   sent_t: number
   arrive_t: number
   delivered: boolean
+  predicted_p: number | null
 }
 
 export interface Evidence {
@@ -97,6 +104,15 @@ export interface Outcome {
   needs_met: number
 }
 
+export interface EnvoyResult {
+  id: string
+  actor: string
+  mandate: string
+  baseline: number
+  utility: number
+  gain: number
+}
+
 export interface Receipt {
   tie: string[]
   evidence: Evidence[]
@@ -107,9 +123,26 @@ export interface Receipt {
   deferred: Record<string, number>
   needs_met: number
   lottery: Outcome
+  envoys: EnvoyResult[]
   explanation: string
   narrative: string
   narrative_source: IntentSource
+}
+
+export interface Ghost {
+  planet: NodeId
+  expected_requests: number
+  p_at_least_one: number
+  expected_kg: number
+  window_start: number
+  window_end: number
+  times: number[]
+}
+
+export interface Forecast {
+  low: number
+  high: number
+  p_tie: number
 }
 
 export interface NodeView {
@@ -119,6 +152,8 @@ export interface NodeView {
   deferred: Record<string, number>
   hash: string
   tie_risk: number
+  ghost: Ghost
+  forecast: Record<string, Forecast>
 }
 
 export interface StateOut {
@@ -133,6 +168,7 @@ export interface StateOut {
   receipts: Receipt[]
   naive_allocations: Record<string, number>
   ai_enabled: boolean
+  ghost_metrics: Record<string, number>
 }
 
 export interface FairnessOut {

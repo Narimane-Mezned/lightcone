@@ -40,14 +40,48 @@ def test_needs_aware_beats_lottery_on_needs_met():
     assert s["nodes"]["earth"]["hash"] == s["nodes"]["mars"]["hash"]
 
 
-def test_tie_risk_grows_with_other_planet_activity():
+def test_ghost_radar_predicts_unseen_requests():
     e = make()
-    assert e.snapshot(at=10)["nodes"]["earth"]["tie_risk"] == 0.0
-    book(e, "mars", "Jezero Clinic", NeedSpec(min_qty=10, max_qty=10), 20)
-    assert e.snapshot(at=30)["nodes"]["earth"]["tie_risk"] > 0.0
+    s = e.snapshot(at=L)
+    radar = s["nodes"]["earth"]["ghost"]
+    assert radar["planet"] == "mars"
+    assert 0 < radar["p_at_least_one"] < 1
+    assert radar["window_end"] - radar["window_start"] == L
+    assert s["nodes"]["earth"]["tie_risk"] == radar["p_at_least_one"]
+
+
+def test_forecast_gives_a_range_for_provisional_bookings():
+    e = make()
+    book(e, "earth", "Helios Freight", NeedSpec(min_qty=400, max_qty=400, category="commercial", can_defer=True), 100)
+    f = e.snapshot(at=200)["nodes"]["earth"]["forecast"]["E-1"]
+    assert f["low"] <= f["high"] == 400
+
+
+def test_envoys_both_beat_the_lottery():
+    e = make(policy="envoys")
+    book(e, "earth", "Helios Freight", NeedSpec(min_qty=400, max_qty=400, category="commercial", can_defer=True, next_ship_value=0.7), 0)
+    book(e, "mars", "Jezero Clinic", NeedSpec(min_qty=250, max_qty=300, category="medical"), 200)
+    s = e.snapshot(at=3 * L)
+    rc = s["receipts"][0]
+    assert len(rc["envoys"]) == 2
+    assert all(env["gain"] >= 0 for env in rc["envoys"])
+    assert rc["allocation"]["M-1"] >= 250
+    assert s["nodes"]["earth"]["hash"] == s["nodes"]["mars"]["hash"]
+
+
+def test_rules_parse_yield_to_medical():
+    needs, _ = parse_rules("We want 400 kg and can wait for the next ship. We can give up 50 kg for a medical emergency.")
+    assert needs.can_defer and needs.next_ship_value == 0.7
+    assert needs.yield_to_medical and needs.yield_max_qty == 50
 
 
 def test_guardrail_rejects_invented_numbers():
     facts = '{"receives_now": 300, "guaranteed_next_ship": 200}'
     assert guardrail_ok("The clinic receives 300 kg and freight 200 kg next ship.", facts)
     assert not guardrail_ok("The clinic receives 350 kg.", facts)
+
+
+def test_yield_clause_does_not_change_own_category():
+    needs, _ = parse_rules("We would like 400 kg of cargo space. We can wait for the next ship for part of it, and we can give up 50 kg for a medical emergency.")
+    assert needs.category == "commercial"
+    assert needs.yield_to_medical and needs.yield_max_qty == 50

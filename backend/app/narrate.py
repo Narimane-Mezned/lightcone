@@ -16,6 +16,20 @@ Strict rules: use ONLY numbers that appear in the JSON. Do not invent quantities
 Return ONLY a JSON object: {"narrative": "..."}
 """
 
+ENVOY_SYSTEM = """You write the negotiation transcript between AI envoys in Lightcone.
+Context: cargo bookings made on Earth and Mars so close in time that, because of light delay, neither side could have known
+about the other. The humans cannot negotiate (each message takes many minutes), so each request carried an AI envoy holding its
+owner's mandate. The envoys already reached a deal (computed by Nash bargaining over their mandates); you only narrate it.
+
+You receive the facts as JSON. Write 3 to 5 short lines of dialogue, each starting with "Envoy for <requester>:", where each envoy
+states its owner's need, what it concedes or accepts (for example a guaranteed next-ship slot) and why the deal beats a coin flip
+for its owner (compare "utility_percent" with "lottery_expected_percent"). End with one line starting with "Deal:" summarising
+what each requester receives now and on the next ship.
+
+Strict rules: use ONLY numbers that appear in the JSON. Do not invent quantities, percentages, times or names.
+Return ONLY a JSON object: {"narrative": "..."} with lines separated by \n.
+"""
+
 _cache: dict[tuple, dict] = {}
 _pending: set[tuple] = set()
 _lock = threading.Lock()
@@ -30,12 +44,12 @@ def _normalise(n: str) -> str:
 def guardrail_ok(narrative: str, facts_text: str) -> bool:
     allowed = {_normalise(n) for n in re.findall(r"\d+(?:\.\d+)?", facts_text)}
     used = {_normalise(n) for n in re.findall(r"\d+(?:\.\d+)?", narrative)}
-    return used <= allowed and 0 < len(narrative) < 900
+    return used <= allowed and 0 < len(narrative) < 1400
 
 
-def _work(key: tuple, facts_text: str) -> None:
+def _work(key: tuple, facts_text: str, system: str) -> None:
     try:
-        raw = llm.chat_json(SYSTEM, facts_text)
+        raw = llm.chat_json(system, facts_text)
         narrative = str(raw.get("narrative", "")).strip()
         if guardrail_ok(narrative, facts_text):
             result = {"narrative": narrative, "source": "llm"}
@@ -51,14 +65,14 @@ def _work(key: tuple, facts_text: str) -> None:
         _pending.discard(key)
 
 
-def get_narrative(key: tuple, facts_text: str, fallback: str) -> tuple[str, str]:
+def get_narrative(key: tuple, facts_text: str, fallback: str, system: str = SYSTEM) -> tuple[str, str]:
     if not llm.enabled():
         return fallback, "rules"
     with _lock:
         cached = _cache.get(key)
         if cached is None and key not in _pending:
             _pending.add(key)
-            threading.Thread(target=_work, args=(key, facts_text), daemon=True).start()
+            threading.Thread(target=_work, args=(key, facts_text, system), daemon=True).start()
     if cached and cached["narrative"]:
         return cached["narrative"], "llm"
     return fallback, "rules"

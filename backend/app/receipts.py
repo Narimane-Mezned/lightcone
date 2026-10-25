@@ -1,6 +1,6 @@
 import json
 
-from .narrate import get_narrative
+from .narrate import ENVOY_SYSTEM, SYSTEM, get_narrative
 from .node import Request
 
 PLANET = {"earth": "Earth", "mars": "Mars"}
@@ -44,7 +44,22 @@ def build_receipt(tie: dict, policy: str, one_way_s: float, unit: str) -> dict:
     allocation = tie["allocation"]
     deferred = tie["deferred"]
     shares = ", ".join(f"{rid} gets {_g(allocation[rid])} {unit}" for rid in order)
-    if policy == "needs":
+    envoys = tie.get("envoys", [])
+    if policy == "envoys":
+        if tie.get("method") == "nash":
+            sentences.append(
+                "AI envoys negotiated for their owners (Nash bargaining over the mandates compiled from their own words): "
+                f"each accepted only a deal better than its expected lottery outcome. Result: {shares}."
+            )
+        else:
+            sentences.append(f"No deal beat the lottery for everyone, so the needs-aware rule applied. Result: {shares}.")
+        for rid, qty in deferred.items():
+            sentences.append(f"{rid} is guaranteed {_g(qty)} {unit} with priority on the next ship.")
+        for e in envoys:
+            sentences.append(
+                f"Envoy for {e['actor']}: {round(e['utility'] * 100)}% of its ideal outcome vs {round(e['baseline'] * 100)}% expected from a lottery."
+            )
+    elif policy == "needs":
         sentences.append(
             "Needs-aware resolution: everyone's minimum first (requests that cannot wait before those that can, "
             f"then medical, science, commercial), the rest shared fairly. Result: {shares}."
@@ -89,9 +104,19 @@ def build_receipt(tie: dict, policy: str, one_way_s: float, unit: str) -> dict:
         "needs_met": tie["needs_met"],
         "needs_met_by_lottery": tie["lottery"]["needs_met"],
     }
+    if envoys:
+        facts["envoys"] = [
+            {
+                "requester": e["actor"],
+                "mandate": e["mandate"],
+                "utility_percent": round(e["utility"] * 100),
+                "lottery_expected_percent": round(e["baseline"] * 100),
+            }
+            for e in envoys
+        ]
     facts_text = json.dumps(facts)
     key = (tuple(sorted(by_id)), policy, json.dumps(allocation, sort_keys=True), json.dumps(deferred, sort_keys=True))
-    narrative, source = get_narrative(key, facts_text, explanation)
+    narrative, source = get_narrative(key, facts_text, explanation, ENVOY_SYSTEM if policy == "envoys" else SYSTEM)
 
     return {
         "tie": sorted(by_id),
@@ -103,6 +128,7 @@ def build_receipt(tie: dict, policy: str, one_way_s: float, unit: str) -> dict:
         "deferred": deferred,
         "needs_met": tie["needs_met"],
         "lottery": tie["lottery"],
+        "envoys": envoys,
         "explanation": explanation,
         "narrative": narrative,
         "narrative_source": source,

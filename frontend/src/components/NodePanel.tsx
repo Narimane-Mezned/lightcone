@@ -11,13 +11,13 @@ interface Props {
 const DEFAULTS: Record<NodeId, { actor: string; text: string; needs: NeedSpec }> = {
   earth: {
     actor: 'Helios Freight',
-    text: 'We would like 400 kg of cargo space, but we can wait for the next ship if needed.',
-    needs: { min_qty: 400, max_qty: 400, category: 'commercial', can_defer: true, summary: '' },
+    text: 'We would like 400 kg of cargo space. We can wait for the next ship for part of it, and we can give up 50 kg for a medical emergency.',
+    needs: { min_qty: 400, max_qty: 400, category: 'commercial', can_defer: true, next_ship_value: 0.7, yield_to_medical: true, yield_max_qty: 50, summary: '' },
   },
   mars: {
     actor: 'Jezero Clinic',
     text: 'We need at least 250 kg of medical supplies before the March launch window. Anything above 300 kg is useless.',
-    needs: { min_qty: 250, max_qty: 300, category: 'medical', can_defer: false, summary: '' },
+    needs: { min_qty: 250, max_qty: 300, category: 'medical', can_defer: false, next_ship_value: 0, yield_to_medical: false, yield_max_qty: 0, summary: '' },
   },
 }
 
@@ -38,7 +38,9 @@ export default function NodePanel({ node, state, onBooked }: Props) {
   const unit = state.resource.unit
   const byId = Object.fromEntries(view.log.map((r) => [r.id, r]))
   const valid = needs.max_qty > 0 && needs.min_qty >= 0 && needs.min_qty <= needs.max_qty && actor.trim().length > 0
-  const risk = Math.round(view.tie_risk * 100)
+  const radar = view.ghost
+  const risk = Math.round(radar.p_at_least_one * 100)
+  const forecasts = Object.entries(view.forecast)
 
   const understand = async () => {
     setThinking(true)
@@ -94,7 +96,7 @@ export default function NodePanel({ node, state, onBooked }: Props) {
 
         <div className="rounded border border-line bg-ink p-2">
           <div className="mb-1 flex flex-col text-xs">
-            <span className="text-muted">Constraints sent with the request</span>
+            <span className="text-muted">Envoy mandate (travels with your request)</span>
             {intent && (
               <span className={intent.source === 'llm' ? 'text-tie' : 'text-signal'}>
                 {intent.source === 'llm' ? `understood by AI · ${intent.model}` : 'understood by rule-based fallback'}
@@ -133,9 +135,43 @@ export default function NodePanel({ node, state, onBooked }: Props) {
               <input
                 type="checkbox"
                 checked={needs.can_defer}
-                onChange={(e) => setNeeds({ ...needs, can_defer: e.target.checked })}
+                onChange={(e) =>
+                  setNeeds({ ...needs, can_defer: e.target.checked, next_ship_value: e.target.checked ? needs.next_ship_value || 0.7 : 0 })
+                }
               />
               can wait for next ship
+            </label>
+            {needs.can_defer && (
+              <label className="col-span-2 flex items-center gap-2 text-xs text-muted">
+                next ship worth
+                <input
+                  type="range"
+                  min={0.1}
+                  max={1}
+                  step={0.1}
+                  value={needs.next_ship_value}
+                  onChange={(e) => setNeeds({ ...needs, next_ship_value: Number(e.target.value) })}
+                  className="flex-1"
+                />
+                <span className="w-10 text-right font-mono text-text">{Math.round(needs.next_ship_value * 100)}%</span>
+              </label>
+            )}
+            <label className="col-span-2 flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={needs.yield_to_medical}
+                onChange={(e) => setNeeds({ ...needs, yield_to_medical: e.target.checked, yield_max_qty: e.target.checked ? needs.yield_max_qty : 0 })}
+              />
+              yields up to
+              <input
+                type="number"
+                min={0}
+                disabled={!needs.yield_to_medical}
+                className={`${field} w-16 font-mono text-text disabled:opacity-40`}
+                value={needs.yield_max_qty}
+                onChange={(e) => setNeeds({ ...needs, yield_max_qty: Number(e.target.value) })}
+              />
+              {unit} to a medical need
             </label>
           </div>
           {intent?.needs.summary && <p className="mt-2 text-xs italic text-muted">"{intent.needs.summary}"</p>}
@@ -146,10 +182,22 @@ export default function NodePanel({ node, state, onBooked }: Props) {
           ))}
         </div>
 
-        <p className="text-xs text-muted">
-          Tie-risk forecast: <span className={risk >= 30 ? 'text-tie' : 'text-text'}>{risk}%</span> that a request from{' '}
-          {other} you cannot see yet collides with yours.
-        </p>
+        <div className="rounded border border-dashed border-line p-2 text-xs">
+          <div className="mb-1 flex justify-between">
+            <span className="text-tie">Ghost Radar (ML)</span>
+            <span className="font-mono text-muted">last {Math.round((radar.window_end - radar.window_start) / 60)} min of {other}</span>
+          </div>
+          <p className="text-muted">
+            Expected <span className="font-mono text-text">{radar.expected_requests.toFixed(2)}</span> request(s) from {other} already
+            travelling toward you, unseen. Chance of at least one:{' '}
+            <span className={`font-mono ${risk >= 30 ? 'text-tie' : 'text-text'}`}>{risk}%</span> (~{Math.round(radar.expected_kg)} {unit} each).
+          </p>
+          {forecasts.map(([id, f]) => (
+            <p key={id} className="mt-1 font-mono text-text">
+              {id} likely final: {f.low === f.high ? `${f.high}` : `${f.low}–${f.high}`} {unit}
+            </p>
+          ))}
+        </div>
 
         <button
           onClick={book}

@@ -1,8 +1,7 @@
-import math
 import threading
 from dataclasses import dataclass
 
-from . import llm, narrate
+from . import ghost, llm, narrate
 from .clock import SimClock
 from .models import RequestIn, ScenarioIn
 from .node import Node, Request
@@ -18,6 +17,7 @@ class Message:
     sent_t: float
     arrive_t: float
     delivered: bool = False
+    predicted_p: float | None = None
 
 
 class Engine:
@@ -45,6 +45,7 @@ class Engine:
     def _advance(self, now: float) -> None:
         for message in sorted(self.messages, key=lambda m: m.arrive_t):
             if not message.delivered and message.arrive_t <= now:
+                message.predicted_p = ghost.radar(message.to_node, message.arrive_t, self.one_way_s)["p_at_least_one"]
                 self.nodes[message.to_node].receive(message.request)
                 message.delivered = True
 
@@ -62,6 +63,9 @@ class Engine:
             "priority": request.priority,
             "min_qty": request.min_qty,
             "can_defer": request.can_defer,
+            "next_ship_value": request.next_ship_value,
+            "yield_to_medical": request.yield_to_medical,
+            "yield_max_qty": request.yield_max_qty,
             "text": request.text,
             "vc": request.vc,
             "sim_t": round(request.sim_t, 1),
@@ -83,6 +87,9 @@ class Engine:
                     min_qty=body.needs.min_qty,
                     can_defer=body.needs.can_defer,
                     text=body.text,
+                    next_ship_value=body.needs.next_ship_value,
+                    yield_to_medical=body.needs.yield_to_medical,
+                    yield_max_qty=body.needs.yield_max_qty,
                 )
             else:
                 request = self.nodes[body.node].create(body.actor, body.qty, body.priority, now, text=body.text)
@@ -107,12 +114,33 @@ class Engine:
             capacity -= give
         return allocation
 
-    def _tie_risk(self, name: str, now: float) -> float:
-        other = [r for r in self.requests if r.node != name]
-        if not other:
-            return 0.0
-        rate = len(other) / max(now, self.one_way_s)
-        return round(1 - math.exp(-rate * 2 * self.one_way_s), 3)
+    def _forecast(self, node: Node, radar: dict, now: float, allocations: dict[str, float]) -> dict:
+        resource = self.scenario.resource
+        own = [r for r in node.log if r.node == node.name and now < r.sim_t + 2 * self.one_way_s]
+        if not own or radar["p_at_least_one"] <= 0:
+            return {}
+        other = radar["planet"]
+        kg = radar["expected_kg"]
+        phantom = Request(
+            id="G-1",
+            node=other,
+            actor="predicted request",
+            qty=kg,
+            priority="commercial",
+            vc=[0, node.vc[1] + 1] if other == "mars" else [node.vc[0] + 1, 0],
+            sim_t=now,
+            nonce="ghost",
+            min_qty=round(0.8 * kg, 1),
+        )
+        with_ghost, _, _ = settle(node.log + [phantom], resource.capacity, self.scenario.policy, resource.divisible)
+        return {
+            r.id: {
+                "low": round(min(with_ghost.get(r.id, 0.0), allocations.get(r.id, 0.0)), 1),
+                "high": round(allocations.get(r.id, 0.0), 1),
+                "p_tie": radar["p_at_least_one"],
+            }
+            for r in own
+        }
 
     def snapshot(self, at: float | None = None) -> dict:
         with self.lock:
@@ -125,13 +153,16 @@ class Engine:
             receipts_by_key: dict[tuple, dict] = {}
             for name, node in self.nodes.items():
                 allocations, deferred, ties = settle(node.log, resource.capacity, policy, resource.divisible)
+                radar = ghost.radar(name, now, self.one_way_s)
                 node_views[name] = {
                     "log": [self._request_out(r, now) for r in sorted(node.log, key=lambda r: (r.sim_t, r.id))],
                     "vc": list(node.vc),
                     "allocations": allocations,
                     "deferred": deferred,
                     "hash": allocation_hash(allocations, deferred),
-                    "tie_risk": self._tie_risk(name, now),
+                    "tie_risk": radar["p_at_least_one"],
+                    "ghost": radar,
+                    "forecast": self._forecast(node, radar, now, allocations),
                 }
                 for tie in ties:
                     key = tuple(sorted(r.id for r in tie["members"]))
@@ -152,6 +183,7 @@ class Engine:
                     "sent_t": round(m.sent_t, 1),
                     "arrive_t": round(m.arrive_t, 1),
                     "delivered": m.delivered,
+                    "predicted_p": m.predicted_p,
                 }
                 for m in self.messages
             ]
@@ -168,4 +200,5 @@ class Engine:
                 "receipts": receipts,
                 "naive_allocations": self._naive(),
                 "ai_enabled": llm.enabled(),
+                "ghost_metrics": ghost.metrics(),
             }

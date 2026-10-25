@@ -5,14 +5,55 @@ interface Props {
 }
 
 const POLICY_NAME: Record<string, string> = {
+  envoys: 'AI envoys (Nash bargaining over compiled mandates)',
   needs: 'Needs-aware (AI-compiled constraints)',
   lottery: 'Verifiable lottery',
   prorata: 'Pro-rata',
   priority: 'Priority classes',
 }
 
+function Envoys({ receipt }: { receipt: Receipt }) {
+  return (
+    <div className="grid gap-2 md:grid-cols-2">
+      {receipt.envoys.map((e) => (
+        <div key={e.id} className="rounded border border-line p-3">
+          <div className="flex items-baseline justify-between">
+            <span className="text-sm">
+              <span className="text-tie">Envoy</span> for {e.actor}
+            </span>
+            <span className="font-mono text-xs text-final">+{Math.round(e.gain * 100)} pts</span>
+          </div>
+          <p className="mt-1 font-mono text-xs text-muted">{e.mandate}</p>
+          <div className="mt-2 flex flex-col gap-1 text-xs">
+            <div className="grid grid-cols-[110px_1fr_40px] items-center gap-2">
+              <span className="text-muted">lottery (expected)</span>
+              <div className="h-2 rounded bg-ink">
+                <div className="h-2 rounded bg-muted" style={{ width: `${e.baseline * 100}%` }} />
+              </div>
+              <span className="text-right font-mono">{Math.round(e.baseline * 100)}%</span>
+            </div>
+            <div className="grid grid-cols-[110px_1fr_40px] items-center gap-2">
+              <span className="text-text">negotiated deal</span>
+              <div className="h-2 rounded bg-ink">
+                <div className="h-2 rounded bg-tie" style={{ width: `${e.utility * 100}%` }} />
+              </div>
+              <span className="text-right font-mono">{Math.round(e.utility * 100)}%</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function Comparison({ receipt, byId, unit }: { receipt: Receipt; byId: Record<string, RequestOut>; unit: string }) {
-  const met = (id: string, now: number, later: number) => now + later >= (byId[id]?.min_qty ?? 0) - 1e-9
+  const hasMedical = (id: string) => receipt.tie.some((o) => o !== id && byId[o]?.priority === 'medical')
+  const effMin = (id: string) => {
+    const r = byId[id]
+    if (!r) return 0
+    return r.yield_to_medical && hasMedical(id) ? Math.max(0, r.min_qty - r.yield_max_qty) : r.min_qty
+  }
+  const met = (id: string, now: number, later: number) => now + later >= effMin(id) - 1e-9
   return (
     <table className="w-full text-left font-mono text-xs">
       <thead className="text-muted">
@@ -37,7 +78,7 @@ function Comparison({ receipt, byId, unit }: { receipt: Receipt; byId: Record<st
                 <span className="text-muted">{r?.actor}</span>
               </td>
               <td className="text-muted">
-                {r ? `${r.min_qty}–${r.qty} ${unit}${r.can_defer ? ', can wait' : ''}` : ''}
+                {r ? `${r.min_qty}–${r.qty} ${unit}${r.can_defer ? ', can wait' : ''}${r.yield_to_medical && hasMedical(id) ? `, yields ${r.yield_max_qty}` : ''}` : ''}
               </td>
               <td className={met(id, now, later) ? 'text-final' : 'text-mars'}>
                 {now} {unit} {met(id, now, later) ? '✓' : '✗'}
@@ -74,7 +115,7 @@ export default function Receipts({ state }: Props) {
             <span className="rounded bg-tie/20 px-2 py-0.5 text-xs font-bold text-tie">TRUE TIE</span>
             <span className="font-mono text-sm">{rc.tie.join(' ⟷ ')}</span>
             <span className="text-xs text-muted">{POLICY_NAME[rc.policy] ?? rc.policy}</span>
-            {rc.policy === 'needs' && (
+            {(rc.policy === 'needs' || rc.policy === 'envoys') && (
               <span className="ml-auto text-sm">
                 needs met <span className="text-final">{rc.needs_met}/{rc.tie.length}</span>
                 <span className="text-muted"> · lottery {rc.lottery.needs_met}/{rc.tie.length}</span>
@@ -82,14 +123,15 @@ export default function Receipts({ state }: Props) {
             )}
           </div>
 
-          <p className="leading-relaxed">{rc.narrative}</p>
+          <p className="whitespace-pre-line leading-relaxed">{rc.narrative}</p>
           <p className="text-xs text-muted">
             {rc.narrative_source === 'llm'
               ? 'Written by AI from the decision data · every number checked against the decision before display'
               : 'Template explanation (AI offline)'}
           </p>
 
-          {rc.policy === 'needs' && <Comparison receipt={rc} byId={byId} unit={state.resource.unit} />}
+          {rc.envoys.length > 0 && <Envoys receipt={rc} />}
+          {(rc.policy === 'needs' || rc.policy === 'envoys') && <Comparison receipt={rc} byId={byId} unit={state.resource.unit} />}
 
           <details className="text-xs text-muted">
             <summary className="cursor-pointer">Proof details</summary>
