@@ -113,15 +113,33 @@ def _validate(raw: dict, text: str) -> tuple[NeedSpec, list[str]]:
     return needs, notes
 
 
+def _reason(error: Exception) -> str:
+    response = getattr(error, "response", None)
+    code = getattr(response, "status_code", None)
+    if code == 401:
+        return "AI rejected the API key (401): check OPENROUTER_API_KEY in backend/.env."
+    if code == 402:
+        return "AI refused (402): the model is not free or the account needs credits; use a ':free' model."
+    if code == 404:
+        return "AI model not available (404): enable free model endpoints in OpenRouter privacy settings, or change LLM_MODELS."
+    if code == 429:
+        return "AI rate limit reached (429): wait a minute; free tier is about 20 requests/minute and 50/day."
+    if code:
+        return f"AI service error ({code})."
+    if isinstance(error, ValueError):
+        return f"AI answer rejected by guardrail ({error})."
+    return f"AI unreachable ({type(error).__name__})."
+
+
 def compile_intent(text: str) -> IntentOut:
     if llm.enabled():
         try:
-            raw = llm.chat_json(SYSTEM, text)
+            raw, model = llm.chat_json(SYSTEM, text)
             needs, notes = _validate(raw, text)
-            return IntentOut(needs=needs, source="llm", model=llm.MODEL, notes=notes)
+            return IntentOut(needs=needs, source="llm", model=model, notes=notes)
         except Exception as error:
             needs, notes = parse_rules(text)
-            notes.insert(0, f"AI unavailable or rejected by guardrail ({type(error).__name__}); rule-based parser used.")
+            notes.insert(0, f"{_reason(error)} Rule-based parser used.")
             return IntentOut(needs=needs, source="rules", model="rules", notes=notes)
     needs, notes = parse_rules(text)
     notes.insert(0, "AI disabled (no API key); rule-based parser used.")
