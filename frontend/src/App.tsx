@@ -8,6 +8,7 @@ import Spacetime from './components/Spacetime'
 import Receipts from './components/Receipts'
 import PolicyPicker from './components/PolicyPicker'
 import FairnessLab from './components/FairnessLab'
+import DemoRunner from './components/DemoRunner'
 
 const USE_MOCK = false
 const DEFAULT_DATE = '2040-01-01'
@@ -45,6 +46,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col gap-4 p-4">
       <LinkBar link={link} state={state} date={date} onDateChange={setDate} />
+      <DemoRunner state={state} onChanged={setState} />
       {error && (
         <div className="rounded border border-mars px-3 py-2 text-sm text-mars">
           Backend unreachable: {error}

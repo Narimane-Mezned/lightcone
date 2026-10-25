@@ -28,13 +28,15 @@ const fmt = (s: number) => {
 }
 
 export default function Spacetime({ state }: Props) {
-  const span = Math.max(4 * state.one_way_s, 600)
-  const t0 = Math.max(0, state.sim_t - span)
-  const y = (t: number) => TOP + ((t - t0) / span) * (H - TOP - BOTTOM)
-
   const byId = new Map<string, RequestOut>()
   for (const r of [...state.nodes.earth.log, ...state.nodes.mars.log]) byId.set(r.id, r)
   const requests = [...byId.values()]
+
+  const minSpan = Math.max(4 * state.one_way_s, 600)
+  const firstRequest = requests.length ? Math.min(...requests.map((r) => r.sim_t)) : Infinity
+  const t0 = Math.max(0, Math.min(state.sim_t - minSpan, firstRequest - 0.08 * minSpan))
+  const span = Math.max(minSpan, state.sim_t - t0)
+  const y = (t: number) => TOP + ((t - t0) / span) * (H - TOP - BOTTOM)
 
   const tied = new Set(state.receipts.flatMap((rc) => rc.tie))
 
@@ -84,9 +86,9 @@ export default function Spacetime({ state }: Props) {
               <g key={`ghost-${observer}`}>
                 <rect x={gx - 12} y={top} width={24} height={Math.max(bottom - top, 0)} fill={COLOR.tie} opacity={0.08} />
                 <text
-                  x={g.planet === 'earth' ? gx - 16 : gx + 16}
+                  x={g.planet === 'earth' ? gx + 16 : gx - 16}
                   y={top + 12}
-                  textAnchor={g.planet === 'earth' ? 'end' : 'start'}
+                  textAnchor={g.planet === 'earth' ? 'start' : 'end'}
                   fill={COLOR.tie}
                   fontSize={9}
                   opacity={0.8}
@@ -97,9 +99,9 @@ export default function Spacetime({ state }: Props) {
                   <g key={`${observer}-${t}`}>
                     <circle cx={gx} cy={y(t)} r={9} fill="none" stroke={COLOR.tie} strokeWidth={1.5} strokeDasharray="2 3" />
                     <text
-                      x={g.planet === 'earth' ? gx - 16 : gx + 16}
+                      x={g.planet === 'earth' ? gx + 16 : gx - 16}
                       y={y(t) + 4}
-                      textAnchor={g.planet === 'earth' ? 'end' : 'start'}
+                      textAnchor={g.planet === 'earth' ? 'start' : 'end'}
                       fill={COLOR.tie}
                       fontSize={10}
                       fontFamily="JetBrains Mono, monospace"

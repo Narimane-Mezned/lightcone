@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import { bookEvent } from './DemoRunner'
 import type { IntentOut, NeedSpec, NodeId, Priority, StateOut } from '../types'
 
 interface Props {
@@ -68,6 +69,16 @@ export default function NodePanel({ node, state, onBooked }: Props) {
       setBusy(false)
     }
   }
+
+  const bookRef = useRef(book)
+  bookRef.current = book
+  useEffect(() => {
+    const handler = () => {
+      bookRef.current()
+    }
+    window.addEventListener(bookEvent(node), handler)
+    return () => window.removeEventListener(bookEvent(node), handler)
+  }, [node])
 
   const field = 'rounded border border-line bg-ink px-2 py-1'
 
@@ -176,7 +187,7 @@ export default function NodePanel({ node, state, onBooked }: Props) {
           </div>
           {intent?.needs.summary && <p className="mt-2 text-xs italic text-muted">"{intent.needs.summary}"</p>}
           {intent?.notes.map((n) => (
-            <p key={n} className="mt-1 text-xs text-signal">
+            <p key={n} className={`mt-1 text-xs ${intent.source === 'llm' ? 'text-muted' : 'text-signal'}`}>
               {n}
             </p>
           ))}
