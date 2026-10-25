@@ -49,7 +49,7 @@ def guardrail_ok(narrative: str, facts_text: str) -> bool:
 
 def _work(key: tuple, facts_text: str, system: str) -> None:
     try:
-        raw = llm.chat_json(system, facts_text)
+        raw, _ = llm.chat_json(system, facts_text)
         narrative = str(raw.get("narrative", "")).strip()
         if guardrail_ok(narrative, facts_text):
             result = {"narrative": narrative, "source": "llm"}

@@ -6,7 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .engine import Engine
 from .fairness import run_fairness
 from .link import compute_link
-from .models import FairnessOut, LinkInfo, RequestIn, RequestOut, ScenarioIn, StateOut
+from .intent import compile_intent
+from .models import FairnessOut, IntentIn, IntentOut, LinkInfo, RequestIn, RequestOut, ScenarioIn, StateOut
 
 app = FastAPI(title="Lightcone API")
 app.add_middleware(
@@ -29,8 +30,9 @@ def _check_range(day: date) -> None:
         raise HTTPException(status_code=422, detail="date must be between 1900 and 2049 (DE421 range)")
 
 
-_default = ScenarioIn(date=date.today().isoformat())
-_link = compute_link(date.today())
+DEFAULT_DATE = date(2040, 1, 1)
+_default = ScenarioIn(date=DEFAULT_DATE.isoformat())
+_link = compute_link(DEFAULT_DATE)
 engine = Engine(_default, _link["one_way_s"], _link["conjunction"])
 
 
@@ -59,9 +61,19 @@ def scenario(body: ScenarioIn):
     return engine.snapshot()
 
 
+@app.post("/api/intent", response_model=IntentOut)
+def intent(body: IntentIn):
+    if not body.text.strip():
+        raise HTTPException(status_code=422, detail="text is required")
+    return compile_intent(body.text[:1000])
+
+
 @app.post("/api/request", response_model=RequestOut)
 def request(body: RequestIn):
-    if body.qty <= 0:
+    if body.needs:
+        if body.needs.max_qty <= 0 or body.needs.min_qty < 0 or body.needs.min_qty > body.needs.max_qty:
+            raise HTTPException(status_code=422, detail="needs must satisfy 0 <= min_qty <= max_qty and max_qty > 0")
+    elif body.qty <= 0:
         raise HTTPException(status_code=422, detail="qty must be positive")
     if not body.actor.strip():
         raise HTTPException(status_code=422, detail="actor is required")
